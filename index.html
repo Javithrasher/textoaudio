@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertidor de Documento a Voz</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #3D5AFE;
+            --primary-hover: #304FFE;
+            --background-color: #F7F9FC;
+            --card-background: #FFFFFF;
+            --text-color: #263238;
+            --light-text-color: #546E7A;
+            --border-color: #CFD8DC;
+            --error-color: #E53935;
+            --font-family: 'Roboto', sans-serif;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 7px 14px rgba(0, 0, 0, 0.07), 0 3px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+        }
+
+        #logo {
+            display: block;
+            margin: 0 auto 1.5rem;
+            width: 150px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+        }
+
+        header p {
+            font-size: 1.1rem;
+            color: var(--light-text-color);
+        }
+
+        .card {
+            background-color: var(--card-background);
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            transition: box-shadow 0.3s ease;
+        }
+        .card:focus-within {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary-color);
+            background-color: #EFF2FF;
+            transform: translateY(-2px);
+        }
+
+        #file-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            color: var(--light-text-color);
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        #file-label svg {
+            color: var(--primary-color);
+            width: 32px;
+            height: 32px;
+            transition: transform 0.3s ease;
+        }
+
+        .upload-area:hover #file-label svg {
+            transform: scale(1.1);
+        }
+
+        #file-name {
+            word-break: break-all;
+            font-size: 0.9rem;
+            min-height: 1.2em;
+        }
+
+        .voice-selection {
+            border: none;
+            padding: 0;
+            width: 100%;
+        }
+
+        .voice-selection legend {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            padding: 0;
+            font-size: 1.1rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .radio-group input[type="radio"] {
+            display: none;
+        }
+
+        .radio-group label {
+            flex-grow: 1;
+            text-align: center;
+            padding: 0.75rem 1.5rem;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .radio-group input[type="radio"]:checked + label {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 4px rgba(61, 90, 254, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .radio-group label:hover {
+            border-color: var(--primary-hover);
+            color: var(--primary-hover);
+        }
+
+        .radio-group input[type="radio"]:checked + label:hover {
+            color: white;
+        }
+
+        button, .button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            box-shadow: var(--shadow);
+        }
+
+        button:hover:not(:disabled), .button:hover {
+            background-color: var(--primary-hover);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background-color: #B0BEC5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        #result-area h2 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        #audio-player {
+            width: 100%;
+        }
+
+        #download-link {
+            background-color: #43A047;
+        }
+
+        #download-link:hover {
+            background-color: #388E3C;
+        }
+
+        #loading-indicator {
+            text-align: center;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        #loading-indicator p {
+            font-weight: 500;
+            color: var(--light-text-color);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #CFD8DC;
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error-message {
+            background-color: #FFEBEE;
+            color: var(--error-color);
+            border: 1px solid var(--error-color);
+            text-align: center;
+            font-weight: 500;
+            padding: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem;
+            }
+            header h1 {
+                font-size: 1.8rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+            .radio-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <img src="https://blogsaverroes.juntadeandalucia.es/ieslucussolis/files/2025/05/Imagen-de-WhatsApp-2025-05-23-a-las-08.58.11_64914ed7.jpg" alt="Logo IES Lucus Solis" id="logo">
+            <h1>Convertidor de Documento a Voz</h1>
+            <p>Sube un archivo .pdf o .docx para convertirlo en audio.</p>
+        </header>
+
+        <main>
+            <div class="card">
+                <div class="upload-area">
+                    <input type="file" id="file-input" accept=".pdf,.docx" hidden>
+                    <label for="file-input" id="file-label" role="button" aria-label="Seleccionar archivo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <span id="file-name">Selecciona un archivo o arrástralo aquí</span>
+                    </label>
+                </div>
+
+                <fieldset class="voice-selection">
+                    <legend>Elige una voz</legend>
+                    <div class="radio-group">
+                        <input type="radio" id="female-voice" name="voice" value="female" checked>
+                        <label for="female-voice">Femenina</label>
+                        <input type="radio" id="male-voice" name="voice" value="male">
+                        <label for="male-voice">Masculina</label>
+                    </div>
+                </fieldset>
+
+                <button id="convert-btn" disabled>Convertir a Audio</button>
+            </div>
+
+            <div id="result-area" class="card" hidden>
+                <h2>¡Tu audio está listo!</h2>
+                <audio id="audio-player" controls></audio>
+                <a id="download-link" class="button" download="audio.mp3">Descargar Audio (.mp3)</a>
+            </div>
+
+            <div id="loading-indicator" hidden>
+                <div class="spinner"></div>
+                <p></p>
+            </div>
+            
+            <div id="error-message" class="card" hidden></div>
+        </main>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "@google/genai": "https://esm.sh/@google/genai@^0.14.0"
+        }
+    }
+    </script>
+    <script type="module">
+        /**
+         * @license
+         * SPDX-License-Identifier: Apache-2.0
+         */
+        import { GoogleGenAI, Modality } from "@google/genai";
+
+        // Declaraciones para bibliotecas globales
+        declare const pdfjsLib: any;
+        declare const mammoth: any;
+        declare const lamejs: any;
+
+        const FEMALE_VOICE = 'Kore';
+        const MALE_VOICE = 'Fenrir';
+
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+        const fileInput = document.getElementById('file-input');
+        const fileLabel = document.getElementById('file-label');
+        const fileNameSpan = document.getElementById('file-name');
+        const convertBtn = document.getElementById('convert-btn');
+        const resultArea = document.getElementById('result-area');
+        const audioPlayer = document.getElementById('audio-player');
+        const downloadLink = document.getElementById('download-link');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorMessageDiv = document.getElementById('error-message');
+        const uploadArea = document.querySelector('.upload-area');
+
+        let extractedText = '';
+
+        // Lógica de arrastrar y soltar
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer?.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+        convertBtn.addEventListener('click', handleConvert);
+
+        async function handleFileSelect() {
+            const file = fileInput.files?.[0];
+            if (!file) return;
+
+            resetState();
+            showLoading('Extrayendo texto del documento...');
+            fileNameSpan.textContent = file.name;
+            
+            try {
+                const fileExtension = file.name.split('.').pop()?.toLowerCase();
+                if (fileExtension === 'pdf') {
+                    extractedText = await extractTextFromPdf(file);
+                } else if (fileExtension === 'docx') {
+                    extractedText = await extractTextFromDocx(file);
+                } else {
+                    throw new Error('Tipo de archivo no soportado. Por favor, sube un PDF o DOCX.');
+                }
+
+                if (extractedText.trim()) {
+                    convertBtn.disabled = false;
+                } else {
+                     throw new Error('No se pudo extraer texto del documento.');
+                }
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function extractTextFromPdf(file) {
+            const pdf = await pdfjsLib.getDocument(await file.arrayBuffer()).promise;
+            let text = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map((item) => item.str).join(' ');
+            }
+            return text;
+        }
+
+        async function extractTextFromDocx(file) {
+            const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+            return value;
+        }
+
+        async function handleConvert() {
+            if (!extractedText) {
+                showError('No hay texto para convertir.');
+                return;
+            }
+
+            resetState(true);
+            showLoading('Audio en preparación...');
+
+            try {
+                const selectedVoice = document.querySelector('input[name="voice"]:checked').value;
+                const voiceName = selectedVoice === 'female' ? FEMALE_VOICE : MALE_VOICE;
+
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash-preview-tts",
+                    contents: [{ parts: [{ text: extractedText }] }],
+                    config: {
+                        responseModalities: [Modality.AUDIO],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: { voiceName: voiceName },
+                            },
+                        },
+                    },
+                });
+
+                const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+                if (!base64Audio) {
+                    throw new Error('La respuesta de la API no contenía datos de audio.');
+                }
+
+                const pcmData = decodeBase64(base64Audio);
+                const mp3Blob = createMp3Blob(pcmData, 1, 24000);
+                const audioUrl = URL.createObjectURL(mp3Blob);
+
+                audioPlayer.src = audioUrl;
+                downloadLink.href = audioUrl;
+                resultArea.hidden = false;
+
+            } catch (error) {
+                console.error(error);
+                showError('Hubo un error al generar el audio. Por favor, inténtalo de nuevo.');
+            } finally {
+                hideLoading();
+                convertBtn.disabled = false;
+            }
+        }
+
+        function decodeBase64(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        function createMp3Blob(pcmData, numChannels, sampleRate) {
+            const encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128); // mono, 24kHz, 128 kbps
+            const pcmDataInt16 = new Int16Array(pcmData.buffer);
+            
+            const CHUNK_SIZE = 1152;
+            const mp3Data = [];
+
+            for (let i = 0; i < pcmDataInt16.length; i += CHUNK_SIZE) {
+                const chunk = pcmDataInt16.subarray(i, i + CHUNK_SIZE);
+                const mp3buf = encoder.encodeBuffer(chunk);
+                if (mp3buf.length > 0) {
+                    mp3Data.push(new Uint8Array(mp3buf));
+                }
+            }
+            
+            const mp3buf = encoder.flush();
+            if (mp3buf.length > 0) {
+                mp3Data.push(new Uint8Array(mp3buf));
+            }
+
+            return new Blob(mp3Data, { type: 'audio/mpeg' });
+        }
+
+        function showLoading(message) {
+            loadingIndicator.querySelector('p').textContent = message;
+            loadingIndicator.hidden = false;
+            convertBtn.disabled = true;
+        }
+
+        function hideLoading() {
+            loadingIndicator.hidden = true;
+        }
+
+        function showError(message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.hidden = false;
+        }
+
+        function resetState(keepButtonState = false) {
+            if (!keepButtonState) {
+                convertBtn.disabled = true;
+            }
+            resultArea.hidden = true;
+            errorMessageDiv.hidden = true;
+            if (audioPlayer.src) {
+                URL.revokeObjectURL(audioPlayer.src);
+                audioPlayer.removeAttribute('src');
+            }
+            downloadLink.removeAttribute('href');
+        }
+
+        // Inicializar la librería PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js`;
+    </script>
+</body>
+</html>
